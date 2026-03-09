@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Air Quality Index – Campania</title>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- LEAFLET CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- LEAFLET MARKER CLUSTER CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.1/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.1/dist/MarkerCluster.Default.css" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="top-bar">
+  <div class="header-content">
+    <div class="title-row">
+      <div class="title-block">
+        <h1>🌍 Air Quality Index</h1>
+        <p class="subtitle">Campania • Mappa interattiva AQI</p>
+      </div>
+
+      <button id="legendBtn" class="legend-btn">📊 Legenda</button>
+    </div>
+
+    <div class="controls-grid">
+      <!-- TIMELINE -->
+      <div class="control-card timeline-container">
+        <button id="prevDate" class="timeline-btn" title="Giorno precedente">←</button>
+
+        <div class="date-info">
+          <span id="currentDate" class="current-date">Loading...</span>
+          <input type="date" id="dateSelector" class="date-picker">
+        </div>
+
+        <button id="nextDate" class="timeline-btn" title="Giorno successivo">→</button>
+      </div>
+
+      <!-- FILTRO INQUINANTI -->
+      <div class="control-card pollutant-filter">
+        <label for="pollutantSelect">Inquinante</label>
+        <select id="pollutantSelect">
+          <option value="PM10">PM10</option>
+            <option value="PM12.5">PM12.5</option>
+          <option value="NO2">NO₂</option>
+          <option value="O3">O₃</option>
+        </select>
+      </div>
+
+      <!-- ORA -->
+      <div class="control-card filter-group">
+        <label for="hourSelect">Ora</label>
+        <select id="hourSelect"></select>
+      </div>
+
+      <!-- STATISTICHE -->
+      <div id="statistics" class="statistics control-card"></div>
+    </div>
+  </div>
+</header>
+
+    <!-- MAPPA -->
+    <div id="map"></div>
+
+    <!-- MODAL DETTAGLI STAZIONE -->
+    <div id="stationDetailsModal" class="station-details-modal">
+        <div class="station-details-content">
+            <span class="station-details-close">&times;</span>
+            <h2 id="stationNameDetail">Dettagli Stazione</h2>
+
+            <div class="station-info-grid">
+                <div class="station-info-item">
+                    <strong>Indice Qualità Aria</strong>
+                    <span id="stationAqiStatus" class="station-aqi-status"></span>
+                </div>
+                <div class="station-info-item">
+                    <strong>Data e Ora</strong>
+                    <span id="stationDateTime"></span>
+                </div>
+            </div>
+
+            <div class="station-details-section">
+                <h3>Andamento Orario Inquinanti</h3>
+                <div class="chart-container">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="station-details-section">
+                <h3>Raccomandazioni per la Popolazione Generale</h3>
+                <p id="generalPopulationAdvice"></p>
+            </div>
+
+            <div class="station-details-section">
+                <h3>Raccomandazioni per la Popolazione Sensibile</h3>
+                <p id="sensitivePopulationAdvice"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL LEGENDA -->
+    <div id="legendModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Air Quality Index – Legenda</h2>
+
+            <p>L'indice di qualità dell'aria (AQI) classifica la qualità dell'aria in diverse categorie, ognuna rappresentata da un colore e un significato specifico. Questa legenda ti aiuta a interpretare i dati visualizzati sulla mappa.</p>
+
+            <h3>Categorie di Qualità dell'Aria</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="color-box" style="background: #2ecc71;"></div>
+                    <div>
+                        <strong>GOOD</strong><br/>
+                        <small>La qualità dell'aria è considerata soddisfacente e l'inquinamento atmosferico presenta un rischio minimo o nullo.</small>
+                    </div>
+                </div>
+
+                <div class="legend-item">
+                    <div class="color-box" style="background: #f1c40f;"></div>
+                    <div>
+                        <strong>FAIR</strong><br/>
+                        <small>La qualità dell'aria è accettabile; tuttavia, per alcuni inquinanti, potrebbe esserci una moderata preoccupazione per la salute per un numero molto piccolo di persone insolitamente sensibili all'inquinamento atmosferico.</small>
+                    </div>
+                </div>
+
+                <div class="legend-item">
+                    <div class="color-box" style="background: #e67e22;"></div>
+                    <div>
+                        <strong>MODERATE</strong><br/>
+                        <small>La qualità dell'aria è accettabile. Tuttavia, per alcuni inquinanti, potrebbe esserci una moderata preoccupazione per la salute per un numero molto piccolo di persone insolitamente sensibili all'inquinamento atmosferico.</small>
+                    </div>
+                </div>
+
+                <div class="legend-item">
+                    <div class="color-box" style="background: #e74c3c;"></div>
+                    <div>
+                        <strong>POOR</strong><br/>
+                        <small>Tutti possono iniziare a sperimentare effetti sulla salute; i membri di gruppi sensibili possono sperimentare effetti sulla salute più gravi.</small>
+                    </div>
+                </div>
+
+                <div class="legend-item">
+                    <div class="color-box" style="background: #7E0023;"></div>
+                    <div>
+                        <strong>VERY POOR</strong><br/>
+                        <small>Avvisi di emergenza sanitaria per tutti. Tutti hanno maggiori probabilità di essere colpiti.</small>
+                    </div>
+                </div>
+
+                <div class="legend-item">
+                    <div class="color-box" style="background: #8e44ad;"></div>
+                    <div>
+                        <strong>EXTREMELY POOR</strong><br/>
+                        <small>Avviso di allerta sanitaria: tutti possono sperimentare effetti sulla salute molto gravi.</small>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Valori di Riferimento degli Inquinanti (µg/m³)</h3>
+            <table class="aqi-table">
+                <thead>
+                    <tr>
+                        <th>Categoria</th>
+                        <th>PM10</th>
+                        <th>O3</th>
+                        <th>NO2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="background: #2ecc71; color: white;">GOOD</td>
+                        <td>0-15</td>
+                        <td>0-60</td>
+                        <td>0-10</td>
+                    </tr>
+                    <tr>
+                        <td style="background: #f1c40f;">FAIR</td>
+                        <td>15-45</td>
+                        <td>60-100</td>
+                        <td>10-25</td>
+                    </tr>
+                    <tr>
+                        <td style="background: #e67e22;">MODERATE</td>
+                        <td>45-120</td>
+                        <td>100-120</td>
+                        <td>25-60</td>
+                    </tr>
+                    <tr>
+                        <td style="background: #e74c3c; color: white;">POOR</td>
+                        <td>120-195</td>
+                        <td>120-160</td>
+                        <td>60-100</td>
+                    </tr>
+                    <tr>
+                        <td style="background: #7E0023; color: white;">VERY POOR</td>
+                        <td>195-270</td>
+                        <td>160-280</td>
+                        <td>100-150</td>
+                    </tr>
+                    <tr>
+                        <td style="background: #8e44ad; color: white;">EXTREMELY POOR</td>
+                        <td>>270</td>
+                        <td>>280</td>
+                        <td>>150</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- LEAFLET JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- LEAFLET MARKER CLUSTER JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.1/dist/leaflet.markercluster.js"></script>
+
+    <!-- CHART.JS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- APP JS -->
+    <script src="app.js"></script>
+</body>
+</html>
+
