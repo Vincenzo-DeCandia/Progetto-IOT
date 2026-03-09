@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import json
+
 
 # Mappatura dei colori per l'AQI (coerente con il frontend)
 AQI_COLORS = {
