@@ -71,38 +71,32 @@
     <!-- MAPPA -->
     <div id="map"></div>
 
-    <!-- MODAL DETTAGLI STAZIONE -->
-    <div id="stationDetailsModal" class="station-details-modal">
-        <div class="station-details-content">
-            <span class="station-details-close">&times;</span>
-            <h2 id="stationNameDetail">Dettagli Stazione</h2>
-
-            <div class="station-info-grid">
-                <div class="station-info-item">
-                    <strong>Indice Qualità Aria</strong>
-                    <span id="stationAqiStatus" class="station-aqi-status"></span>
-                </div>
-                <div class="station-info-item">
-                    <strong>Data e Ora</strong>
-                    <span id="stationDateTime"></span>
-                </div>
+    <!-- Modal per i dettagli della stazione -->
+    <div id="stationDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 id="stationName"></h2>
+            <div class="station-info">
+                <p><strong>Indice Qualità Aria:</strong> <span id="airQualityIndex"></span></p>
+                <p><strong>Data:</strong> <span id="stationDate"></span></p>
+                <p><strong>Paese:</strong> <span id="stationCountry"></span></p>
+                <p><strong>Località:</strong> <span id="stationLocation"></span></p>
+                <p><strong>Classificazione:</strong> <span id="stationClassification"></span></p>
+                <p><strong>Area:</strong> <span id="stationArea"></span></p>
             </div>
-
-            <div class="station-details-section">
-                <h3>Andamento Orario Inquinanti</h3>
-                <div class="chart-container">
-                    <canvas id="hourlyChart"></canvas>
-                </div>
+            <div class="chart-container">
+                <h3>Accumulato ultimi 365 giorni</h3>
+                <canvas id="accumulatedChart"></canvas>
             </div>
-
-            <div class="station-details-section">
-                <h3>Raccomandazioni per la Popolazione Generale</h3>
-                <p id="generalPopulationAdvice"></p>
+            <div class="chart-container">
+                <h3>Andamento Inquinanti</h3>
+                <canvas id="pollutantChart"></canvas>
             </div>
-
-            <div class="station-details-section">
-                <h3>Raccomandazioni per la Popolazione Sensibile</h3>
-                <p id="sensitivePopulationAdvice"></p>
+            <div class="population-info">
+                <h4>Popolazione Generale</h4>
+                <p>Considerare di ridurre le attività intense all'aperto, se si verificano sintomi come bruciore agli occhi, tosse o mal di gola.</p>
+                <h4>Popolazione Sensibile</h4>
+                <p>Considerare di ridurre le attività fisiche, in particolare all'aperto, se si verificano sintomi.</p>
             </div>
         </div>
     </div>

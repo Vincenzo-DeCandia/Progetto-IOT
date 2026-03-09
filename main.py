@@ -21,7 +21,6 @@ import json as json_lib
 from pathlib import Path
 import pandas as pd
 
-
 # ===================================================================
 # SEZIONE 1: ELABORAZIONE DATI GREZZI (TEMPO REALE - ORARI)
 # ===================================================================
@@ -182,3 +181,4 @@ print(df_grezzi.head())
 # Stampa le stazioni uniche per verificare quante ne abbiamo
 print("\n📌 Stazioni trovate:")
 print(df_media["station_name"].unique())
+

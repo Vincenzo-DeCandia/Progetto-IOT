@@ -14,6 +14,12 @@
 let map;                            // Mappa Leaflet (inizializzata dopo DOM ready)
 let stationsLayer;                  // Layer con i marker
 
+// Variabili per il modale dei dettagli della stazione
+const stationDetailsModal = document.getElementById('stationDetailsModal');
+const closeButton = stationDetailsModal.querySelector('.close-button');
+let accumulatedChart;
+let pollutantChart;
+
 // Variabili di stato
 let availableDates = [];        // Lista di date disponibili
 let currentDate = null;         // Data attualmente visualizzata
@@ -434,6 +440,25 @@ function renderMap() {
 
 
 /**
+ * Restituisce il colore del marker in base al valore dell'inquinante e al tipo di inquinante.
+ * @param {number} value - Il valore dell'inquinante.
+ * @param {string} pollutant - Il tipo di inquinante (es. "PM10", "NO2").
+ * @returns {string} Il codice colore esadecimale.
+ */
+function getColorByValue(value, pollutant) {
+    const category = getAqiCategory(pollutant, value);
+    switch (category) {
+        case 'GOOD': return '#2ecc71';
+        case 'FAIR': return '#f1c40f';
+        case 'MODERATE': return '#e67e22';
+        case 'POOR': return '#e74c3c';
+        case 'VERY POOR': return '#7E0023';
+        case 'EXTREMELY POOR': return '#8e44ad';
+        default: return '#cccccc'; // Grigio per valori sconosciuti o non definiti
+    }
+}
+
+/**
  * Renderizza i marker immediatamente (small dataset)
  */
 function renderImmediate(data) {
@@ -456,13 +481,22 @@ function renderImmediate(data) {
         );
 
         marker.bindPopup(`
-            <div class="station-popup">
-                <strong>${station.station_name}</strong><br/>
-                <small>${station.pollutant}</small><br/>
-                <strong>${station.value.toFixed(1)}</strong> µg/m³<br/>
-                <small>${new Date(station.date).toLocaleTimeString('it-IT')}</small>
+            <div class="aq-popup">
+                <div class="aq-popup__title">${station.station_name}</div>
+                <div class="aq-popup__meta">${station.pollutant} • ${station.value.toFixed(1)} µg/m³</div>
+                <div class="aq-popup__row">
+                    <span class="pill">${new Date(station.date).toLocaleTimeString('it-IT')}</span>
+                    <button class="pill view-details-btn" data-station-name="${station.station_name}">Vedi dettagli</button>
+                </div>
             </div>
         `);
+
+        marker.on('popupopen', function() {
+            const btn = document.querySelector(`.view-details-btn[data-station-name="${station.station_name}"]`);
+            if (btn) {
+                btn.onclick = () => showStationDetails(station.station_name);
+            }
+        });
 
         marker.addTo(stationsLayer);
         count++;
@@ -502,22 +536,31 @@ function renderBatch(data) {
             );
 
             marker.bindPopup(`
-                <div class="station-popup">
-                    <strong>${station.station_name}</strong><br/>
-                    <small>${station.pollutant}</small><br/>
-                    <strong>${station.value.toFixed(1)}</strong> µg/m³<br/>
-                    <small>${new Date(station.date).toLocaleTimeString('it-IT')}</small>
+                <div class="aq-popup">
+                    <div class="aq-popup__title">${station.station_name}</div>
+                    <div class="aq-popup__meta">${station.pollutant} • ${station.value.toFixed(1)} µg/m³</div>
+                    <div class="aq-popup__row">
+                        <span class="pill">${new Date(station.date).toLocaleTimeString('it-IT')}</span>
+                        <button class="pill view-details-btn" data-station-name="${station.station_name}">Vedi dettagli</button>
+                    </div>
                 </div>
             `);
+
+            marker.on('popupopen', function() {
+                const btn = document.querySelector(`.view-details-btn[data-station-name="${station.station_name}"]`);
+                if (btn) {
+                    btn.onclick = () => showStationDetails(station.station_name);
+                } else {
+                    console.warn("Pulsante 'Vedi dettagli' non trovato per la stazione:", station.station_name);
+                }
+            });
 
             marker.addTo(stationsLayer);
             count++;
         });
 
-        console.log(`📦 Batch ${batchIdx + 1}/${Math.ceil(data.length / BATCH_SIZE)}`);
         batchIdx++;
-
-        if (batchIdx * BATCH_SIZE < data.length) {
+        if (endIdx < data.length) {
             setTimeout(processBatch, 50);
         } else {
             console.log(`✅ Renderizzati ${count} marker`);
@@ -529,68 +572,395 @@ function renderBatch(data) {
 
 
 /*======================================================
- * SEZIONE 8: ASSEGNAZIONE COLORE
+ * SEZIONE 8: DETTAGLI STAZIONE E GRAFICI
  ======================================================*/
 
 /**
- * Associa un colore al valore dell'inquinante
- * Scala EEA AQI:
- * - Verde (#2ecc71):       = GOOD
- * - Giallo (#f1c40f):      = FAIR
- * - Arancione (#e67e22):   = MODERATE
- * - Rosso (#e74c3c):       = POOR
- * - Viola (#8e44ad):       = EXTREMELY POOR
- *
- * @param {number} value - Valore misurato
- * @param {string} pollutant - Tipo inquinante
- * @returns {string} Colore hex
+ * Mostra il modale con i dettagli della stazione e i grafici.
+ * @param {string} stationName - Il nome della stazione.
  */
-function getColorByValue(value, pollutant) {
+async function showStationDetails(stationName) {
+    console.log(`📊 Richiesta dettagli per la stazione: ${stationName}`);
 
-    if (pollutant === "PM10") {
-         if (value <= 15) {
-            return "#2ecc71";      // Good
-        } else if (value <= 45) {
-            return "#f1c40f";      // Fair
-        } else if (value <= 120) {
-            return "#e67e22";     // Moderate
-        } else if (value <= 195) {
-            return "#e74c3c";     // Poor
-        } else if (value <= 270) {
-            return "#7E0023";     // Very Poor
-        } else {
-            return "#8e44ad";      // Extremely Poor
+    try {
+        // Carica i dati validati (storici) localmente
+        const baseDir = (window.location.protocol === "file:")
+            ? window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'))
+            : ".";
+        const filePath = `${baseDir}/data/validati.json`;
+
+        const response = await fetch(filePath);
+        if (!response.ok) {
+            throw new Error(`Errore nel recupero dei dati validati: ${response.statusText}`);
         }
-    } else if (pollutant === "O3") {
-        if (value <= 60) {
-            return "#2ecc71";      // Good
-        } else if (value <= 100) {
-            return "#f1c40f";      // Fair
-        } else if (value <= 120) {
-            return "#e67e22";     // Moderate
-        } else if (value <= 160) {
-            return "#e74c3c";     // Poor
-        } else if (value <= 280) {
-            return "#7E0023";     // Very Poor
-        } else {
-            return "#8e44ad";      // Extremely Poor
+        const allValidatedData = await response.json();
+
+        // Filtra i dati per la stazione selezionata
+        const stationData = allValidatedData.filter(item => item.station_name === stationName);
+
+        if (stationData.length === 0) {
+            alert(`Dettagli per la stazione '{stationName}' non trovati.`);
+            return;
         }
-    } else if (pollutant === "NO2") {
-           if (value <= 10) {
-            return "#2ecc71";      // Good
-        } else if (value <= 25) {
-            return "#f1c40f";      // Fair
-        } else if (value <= 60) {
-            return "#e67e22";     // Moderate
-        } else if (value <= 100) {
-            return "#e74c3c";     // Poor
-        } else if (value <= 150) {
-            return "#7E0023";     // Very Poor
-        } else {
-            return "#8e44ad";      // Extremely Poor
+
+        // 1. Informazioni generali (prendi dall'ultimo dato disponibile)
+        const latestData = stationData.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        const { category: aqiCategory, pollutant: aqiPollutant } = getAqiForStation(stationData.filter(item => item.date === latestData.date));
+
+        document.getElementById('stationName').textContent = stationName;
+        document.getElementById('airQualityIndex').textContent = `${aqiCategory} (due to ${aqiPollutant})`;
+        document.getElementById('stationDate').textContent = new Date(latestData.date).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('stationCountry').textContent = "Italia"; // Assumiamo Italia
+        document.getElementById('stationLocation').textContent = stationName; // O un campo più specifico se disponibile
+        document.getElementById('stationClassification').textContent = "Urban"; // Esempio
+        document.getElementById('stationArea').textContent = "City"; // Esempio
+
+        // 2. Dati accumulati (grafico a torta)
+        const aqiCounts = {};
+        stationData.forEach(item => {
+            const category = getAqiCategory(item.pollutant, item.value);
+            aqiCounts[category] = (aqiCounts[category] || 0) + 1;
+
+        });
+
+
+        const totalDataPoints = stationData.length;
+        const accumulatedData = Object.keys(aqiCounts).map(category => ({
+            label: category,
+            percentage: (aqiCounts[category] / totalDataPoints) * 100
+        }));
+        console.log('Percentage', accumulatedData)
+        renderAccumulatedChart(accumulatedData);
+
+        // 3. Dati storici (grafici a barre)
+        // Raggruppa per data e calcola la media per ogni inquinante
+        const historicalDataMap = {};
+        stationData.forEach(item => {
+            const date = new Date(item.date).toISOString().split('T')[0]; // YYYY-MM-DD
+            if (!historicalDataMap[date]) {
+                historicalDataMap[date] = { date: date, PM10: [], NO2: [], O3: [], PM12_5: [] };
+            }
+            if (item.pollutant === 'PM10') historicalDataMap[date].PM10.push(item.value);
+            if (item.pollutant === 'NO2') historicalDataMap[date].NO2.push(item.value);
+            if (item.pollutant === 'O3') historicalDataMap[date].O3.push(item.value);
+            if (item.pollutant === 'PM12.5') historicalDataMap[date].PM12_5.push(item.value);
+        });
+
+        const historicalData = Object.values(historicalDataMap).map(dayData => {
+            const avgPM10 = dayData.PM10.length ? dayData.PM10.reduce((a, b) => a + b) / dayData.PM10.length : null;
+            const avgNO2 = dayData.NO2.length ? dayData.NO2.reduce((a, b) => a + b) / dayData.NO2.length : null;
+            const avgO3 = dayData.O3.length ? dayData.O3.reduce((a, b) => a + b) / dayData.O3.length : null;
+            const avgPM12_5 = dayData.PM12_5.length ? dayData.PM12_5.reduce((a, b) => a + b) / dayData.PM12_5.length : null;
+
+            const dailyPollutants = [];
+            if (avgPM10 !== null) dailyPollutants.push({ pollutant: 'PM10', value: avgPM10 });
+            if (avgNO2 !== null) dailyPollutants.push({ pollutant: 'NO2', value: avgNO2 });
+            if (avgO3 !== null) dailyPollutants.push({ pollutant: 'O3', value: avgO3 });
+            if (avgPM12_5 !== null) dailyPollutants.push({ pollutant: 'PM12.5', value: avgPM12_5 });
+
+            const { category: dailyAqiCategory } = getAqiForStation(dailyPollutants);
+
+            return {
+                date: dayData.date,
+                PM10: avgPM10,
+                NO2: avgNO2,
+                O3: avgO3,
+                PM12_5: avgPM12_5,
+                Index: dailyAqiCategory
+            };
+        });
+
+        renderPollutantChart(historicalData);
+
+        stationDetailsModal.style.display = 'block';
+
+    } catch (error) {
+        console.error("Errore nel mostrare i dettagli della stazione:", error);
+        alert("Impossibile caricare i dettagli della stazione.");
+    }
+}
+
+// Gestione chiusura modale
+closeButton.onclick = () => {
+    stationDetailsModal.style.display = 'none';
+};
+
+window.onclick = (event) => {
+    if (event.target === stationDetailsModal) {
+        stationDetailsModal.style.display = 'none';
+    }
+};
+
+/**
+ * Renderizza il grafico a torta per i dati accumulati.
+ * @param {Array} data - Dati accumulati (es. [{ label: 'Good', percentage: 52.6 }, ...])
+ */
+function renderAccumulatedChart(data) {
+    const ctx = document.getElementById('accumulatedChart').getContext('2d');
+
+    const labels = data.map(item => item.label);
+    const percentages = data.map(item => item.percentage);
+    const backgroundColors = data.map(item => {
+        switch (item.label) {
+            case 'GOOD': return '#2ecc71';
+            case 'FAIR': return '#f1c40f';
+            case 'MODERATE': return '#e67e22';
+            case 'POOR': return '#e74c3c';
+            case 'VERY POOR': return '#7E0023';
+            case 'EXTREMELY POOR': return '#8e44ad';
+            default: return '#cccccc';
+        }
+    });
+
+    console.log(backgroundColors)
+
+    if (accumulatedChart) {
+        accumulatedChart.destroy(); // Distrugge il grafico precedente se esiste
+    }
+
+    accumulatedChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: percentages,
+                backgroundColor: backgroundColors,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed !== null) {
+                                label += context.parsed + '%';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Renderizza i grafici a barre per l'andamento degli inquinanti.
+ * @param {Array} data - Dati storici per gli inquinanti (es. [{ date: '2025-01-01', PM10: 20, NO2: 15, Index: 'Good' }, ...])
+ */
+function renderPollutantChart(data) {
+    const ctx = document.getElementById('pollutantChart').getContext('2d');
+
+    // Ordina i dati per data
+    data.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const dates = data.map(item => new Date(item.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }));
+    const pm10Values = data.map(item => item.PM10);
+    const no2Values = data.map(item => item.NO2);
+    const o3Values = data.map(item => item.O3);
+    const pm12_5Values = data.map(item => item.PM12_5);
+    const indexValues = data.map(item => getAqiValue(item.Index)); // Converte l'indice testuale in un valore numerico per il grafico
+
+    if (pollutantChart) {
+        pollutantChart.destroy(); // Distrugge il grafico precedente se esiste
+    }
+
+    pollutantChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dates,
+            datasets: [
+                {
+                    label: 'PM10',
+                    data: pm10Values,
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'NO2',
+                    data: no2Values,
+                    backgroundColor: 'rgba(255, 159, 64, 0.6)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'O3',
+                    data: o3Values,
+                    backgroundColor: 'rgba(255, 205, 86, 0.6)',
+                    borderColor: 'rgba(255, 205, 86, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Indice AQI',
+                    data: indexValues,
+                    backgroundColor: 'rgba(153, 102, 255, 0.6)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    beginAtZero: true
+                },
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.dataset.label === 'Indice AQI') {
+                                label += getAqiLabel(context.parsed.y); // Converte il valore numerico in etichetta testuale
+                            } else {
+                                label += context.parsed.y + ' µg/m³';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Converte l'etichetta AQI testuale in un valore numerico per il grafico.
+ * @param {string} label - Etichetta AQI (Good, Fair, etc.)
+ * @returns {number} Valore numerico
+ */
+function getAqiValue(label) {
+    switch (label) {
+        case 'GOOD': return 1;
+        case 'FAIR': return 2;
+        case 'MODERATE': return 3;
+        case 'POOR': return 4;
+        case 'VERY POOR': return 5;
+        case 'EXTREMELY POOR': return 6;
+        default: return 0;
+    }
+}
+
+/**
+ * Converte un valore numerico in etichetta AQI testuale.
+ * Usato per i tooltip del grafico.
+ * @param {number} value - Valore numerico dell'AQI
+ * @returns {string} Etichetta AQI
+ */
+function getAqiLabel(value) {
+    switch (value) {
+        case 1: return 'GOOD';
+        case 2: return 'FAIR';
+        case 3: return 'MODERATE';
+        case 4: return 'POOR';
+        case 5: return 'VERY POOR';
+        case 6: return 'EXTREMELY POOR';
+        default: return 'N/A';
+    }
+}
+
+// Soglie AQI (coerenti con il backend Python)
+const AQI_THRESHOLDS = {
+    "PM10": {
+        "GOOD": [0, 15],
+        "FAIR": [15, 45],
+        "MODERATE": [45, 120],
+        "POOR": [120, 195],
+        "VERY POOR": [195, 270],
+        "EXTREMELY POOR": [270, Infinity],
+    },
+    "NO2": {
+        "GOOD": [0, 10],
+        "FAIR": [10, 25],
+        "MODERATE": [25, 60],
+        "POOR": [60, 100],
+        "VERY POOR": [100, 150],
+        "EXTREMELY POOR": [150, Infinity],
+    },
+    "O3": {
+        "GOOD": [0, 60],
+        "FAIR": [60, 100],
+        "MODERATE": [100, 120],
+        "POOR": [120, 160],
+        "VERY POOR": [160, 280],
+        "EXTREMELY POOR": [280, Infinity],
+    },
+    "PM12.5": {
+        "GOOD": [0, 10],
+        "FAIR": [10, 25],
+        "MODERATE": [25, 50],
+        "POOR": [50, 75],
+        "VERY POOR": [75, 100],
+        "EXTREMELY POOR": [100, Infinity],
+    }
+};
+
+/**
+ * Determina la categoria AQI per un dato inquinante e valore.
+ * @param {string} pollutant - Il nome dell'inquinante (es. 'PM10').
+ * @param {number} value - Il valore misurato dell'inquinante.
+ * @returns {string} La categoria AQI (es. 'GOOD', 'POOR').
+ */
+function getAqiCategory(pollutant, value) {
+    if (!AQI_THRESHOLDS[pollutant]) {
+        return "UNKNOWN";
+    }
+
+    for (const category in AQI_THRESHOLDS[pollutant]) {
+        const [lower, upper] = AQI_THRESHOLDS[pollutant][category];
+        if (value >= lower && value < upper) {
+            return category;
         }
     }
-    return "#cccccc"; // Colore di default per inquinanti non riconosciuti
+    return "UNKNOWN";
+}
+
+/**
+ * Calcola l'AQI complessivo per una stazione basandosi sui valori degli inquinanti.
+ * Ritorna la categoria AQI peggiore e l'inquinante responsabile.
+ * @param {Array} stationData - Array di oggetti dati per una stazione in un dato momento.
+ * @returns {Object} Un oggetto con la categoria AQI peggiore e l'inquinante responsabile.
+ */
+function getAqiForStation(stationData) {
+    if (!stationData || stationData.length === 0) {
+        return { category: "N/A", pollutant: "N/A" };
+    }
+
+    let worstAqiCategory = "GOOD";
+    let worstPollutant = "N/A";
+    const aqiOrder = ["GOOD", "FAIR", "MODERATE", "POOR", "VERY POOR", "EXTREMELY POOR"];
+
+    stationData.forEach(item => {
+        const category = getAqiCategory(item.pollutant, item.value);
+        if (aqiOrder.indexOf(category) > aqiOrder.indexOf(worstAqiCategory)) {
+            worstAqiCategory = category;
+            worstPollutant = item.pollutant;
+        }
+    });
+
+    return { category: worstAqiCategory, pollutant: worstPollutant };
 }
 
 
@@ -636,8 +1006,6 @@ function updateStatistics(data) {
         </div>
     `;
 }
-
-
 /*======================================================
  * SEZIONE 10: LEGEND
  ======================================================*/

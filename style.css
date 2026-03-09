@@ -444,6 +444,153 @@ select:focus, input[type="date"]:focus{
   height: 300px; /* Placeholder height for charts */
 }
 
+/* =================================== */
+/*            MODAL STYLES             */
+/* =================================== */
+
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1000; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    padding-top: 60px;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto; /* 15% from the top and centered */
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    width: 90%; /* Could be more or less, depending on screen size */
+    max-width: 800px;
+    position: relative;
+    color: #333;
+}
+
+.close-button, .close-modal {
+    color: #aaa;
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    font-size: 32px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.close-button:hover, .close-button:focus,
+.close-modal:hover, .close-modal:focus {
+    color: #333;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.modal-content h2 {
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.8em;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.modal-content h3 {
+    color: #34495e;
+    margin-top: 25px;
+    margin-bottom: 15px;
+    font-size: 1.4em;
+}
+
+.modal-content p {
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.station-info p {
+    font-size: 1.1em;
+    margin-bottom: 8px;
+}
+
+.station-info strong {
+    color: #555;
+}
+
+.chart-container {
+    margin-bottom: 30px;
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.chart-container canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+.population-info {
+    background-color: #f9f9f9;
+    border-left: 5px solid #3498db;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-top: 30px;
+}
+
+.population-info h4 {
+    color: #2980b9;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+}
+
+.population-info p {
+    font-size: 0.95em;
+    color: #666;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        margin: 20px auto;
+        padding: 20px;
+    }
+
+    .close-button, .close-modal {
+        font-size: 28px;
+        top: 10px;
+        right: 15px;
+    }
+
+    .modal-content h2 {
+        font-size: 1.5em;
+    }
+
+    .modal-content h3 {
+        font-size: 1.2em;
+    }
+
+    .station-info p {
+        font-size: 1em;
+    }
+
+    .population-info {
+        padding: 10px 15px;
+    }
+
+    .population-info h4 {
+        font-size: 1.1em;
+    }
+}
+
 @media (max-width: 980px){
   #map{ height: calc(100vh - 176px); }
   .controls-grid{
